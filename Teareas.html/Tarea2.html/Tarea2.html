@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <title>Tarea 2</title>
+  </head>
+  <body>
+  <h2>Tarea 2/h2>
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>StarJump — Videojuego</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #0a0a1a;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Courier New', monospace;
+      color: #fff;
+      user-select: none;
+    }
+
+    /* ── HUD ── */
+    #hud {
+      display: flex;
+      gap: 40px;
+      align-items: center;
+      margin-bottom: 12px;
+      font-size: 0.85rem;
+      letter-spacing: .08em;
+    }
+    .hud-item { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .hud-label { font-size: 0.65rem; color: #888; letter-spacing: .14em; text-transform: uppercase; }
+    .hud-val   { font-size: 1.1rem; font-weight: bold; color: #fff; }
+    #nivel-val  { color: #f9a825; }
+    #score-val  { color: #4fc3f7; }
+    #vidas-val  { color: #ef5350; }
+
+    /* ── Canvas ── */
+    canvas {
+      border: 2px solid #1a1a3a;
+      border-radius: 8px;
+      display: block;
+      image-rendering: pixelated;
+    }
+
+    /* ── Controles ── */
+    #controles {
+      margin-top: 14px;
+      display: flex;
+      gap: 10px;
+    }
+    .btn-ctrl {
+      background: #1a1a3a;
+      border: 1px solid #333;
+      color: #aaa;
+      padding: 10px 20px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 0.78rem;
+      cursor: pointer;
+      transition: background .15s, color .15s;
+      letter-spacing: .06em;
+    }
+    .btn-ctrl:hover { background: #2a2a5a; color: #fff; }
+
+    /* ── Overlay ── */
+    #overlay {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.78);
+      border-radius: 6px;
+      pointer-events: none;
+    }
+    #overlay.hidden { display: none; }
+    #overlay h2 { font-size: 2rem; letter-spacing: .06em; margin-bottom: 10px; }
+    #overlay p  { color: #aaa; font-size: 0.85rem; letter-spacing: .08em; }
+    .overlay-wrap { position: relative; }
+
+    /* ── Móvil: botones ── */
+    #mobile-btns {
+      display: none;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .m-btn {
+      background: #1a1a3a;
+      border: 1px solid #333;
+      color: #fff;
+      width: 60px; height: 60px;
+      border-radius: 50%;
+      font-size: 1.4rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+    }
+    @media (max-width: 520px) {
+      canvas { width: 360px; height: 270px; }
+      #mobile-btns { display: flex; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-item"><span class="hud-label">Nivel</span><span class="hud-val" id="nivel-val">1</span></div>
+  <div class="hud-item"><span class="hud-label">Score</span><span class="hud-val" id="score-val">0</span></div>
+  <div class="hud-item"><span class="hud-label">Vidas</span><span class="hud-val" id="vidas-val">♥ ♥ ♥</span></div>
+  <div class="hud-item"><span class="hud-label">Monedas</span><span class="hud-val" id="coins-val">0</span></div>
+</div>
+
+<!-- Canvas + Overlay -->
+<div class="overlay-wrap">
+  <canvas id="c" width="640" height="400"></canvas>
+  <div id="overlay">
+    <h2 id="overlay-title" style="color:#f9a825">★ STAR JUMP ★</h2>
+    <p id="overlay-msg">Presiona ESPACIO o toca para iniciar</p>
+  </div>
+</div>
+
+<!-- Controles teclado info -->
+<div id="controles">
+  <span class="btn-ctrl">← → Mover</span>
+  <span class="btn-ctrl">↑ / Espacio — Saltar</span>
+  <span class="btn-ctrl">Doble salto ✓</span>
+</div>
+
+<!-- Botones móvil -->
+<div id="mobile-btns">
+  <button class="m-btn" id="mb-left">←</button>
+  <button class="m-btn" id="mb-jump">↑</button>
+  <button class="m-btn" id="mb-right">→</button>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+
+// ── Estado global ──
+let nivel = 1, score = 0, vidas = 3, coins = 0;
+let estado = 'inicio'; // inicio | jugando | muerto | ganaste | fin
+let frames = 0;
+
+// ── Input ──
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if ((e.code === 'Space' || e.code === 'ArrowUp') && estado === 'inicio') iniciar();
+  if ((e.code === 'Space' || e.code === 'ArrowUp') && estado === 'muerto') reiniciarNivel();
+  if ((e.code === 'Space' || e.code === 'ArrowUp') && estado === 'ganaste') siguienteNivel();
+  if ((e.code === 'Space') && estado === 'fin') reiniciarJuego();
+  e.preventDefault();
+});
+document.addEventListener('keyup', e => { keys[e.code] = false; });
+
+// Móvil
+const mbl = document.getElementById('mb-left');
+const mbr = document.getElementById('mb-right');
+const mbj = document.getElementById('mb-jump');
+mbl.addEventListener('touchstart', e => { keys['ArrowLeft'] = true; e.preventDefault(); }, {passive:false});
+mbl.addEventListener('touchend',   e => { keys['ArrowLeft'] = false; }, {passive:false});
+mbr.addEventListener('touchstart', e => { keys['ArrowRight'] = true; e.preventDefault(); }, {passive:false});
+mbr.addEventListener('touchend',   e => { keys['ArrowRight'] = false; }, {passive:false});
+mbj.addEventListener('touchstart', e => {
+  if (estado === 'inicio') { iniciar(); return; }
+  if (estado === 'muerto') { reiniciarNivel(); return; }
+  if (estado === 'ganaste') { siguienteNivel(); return; }
+  keys['ArrowUp'] = true; e.preventDefault();
+}, {passive:false});
+mbj.addEventListener('touchend', e => { keys['ArrowUp'] = false; }, {passive:false});
+
+// ── Paletas por nivel ──
+const paletas = [
+  { cielo: '#0d0d2b', suelo: '#1a3a1a', plat: '#2e7d32', platBorde: '#388e3c', enemigo: '#c62828', fondo1: '#1b1b3a', fondo2: '#0d0d25' },
+  { cielo: '#1a0a0a', suelo: '#3a1a00', plat: '#bf360c', platBorde: '#e64a19', enemigo: '#6a1b9a', fondo1: '#2a0a00', fondo2: '#180500' },
+  { cielo: '#001a2a', suelo: '#0a1a3a', plat: '#01579b', platBorde: '#0288d1', enemigo: '#558b2f', fondo1: '#002030', fondo2: '#000f18' },
+  { cielo: '#1a001a', suelo: '#2a003a', plat: '#6a1b9a', platBorde: '#8e24aa', enemigo: '#e65100', fondo1: '#1a0028', fondo2: '#100018' },
+  { cielo: '#0a1a00', suelo: '#1a3a00', plat: '#33691e', platBorde: '#558b2f', enemigo: '#b71c1c', fondo1: '#0d2000', fondo2: '#081200' },
+];
+
+// ── Definición de niveles ──
+function crearNivel(n) {
+  const cfg = paletas[(n - 1) % paletas.length];
+  const niveles = [
+    // Nivel 1 — intro suave
+    {
+      plataformas: [
+        {x:0,   y:360, w:640, h:40, tipo:'suelo'},
+        {x:100, y:290, w:100, h:14, tipo:'plat'},
+        {x:270, y:240, w:100, h:14, tipo:'plat'},
+        {x:450, y:180, w:100, h:14, tipo:'plat'},
+        {x:300, y:120, w:120, h:14, tipo:'meta'},
+      ],
+      enemigos: [
+        {x:200, y:340, vx:1.2, ancho:28, alto:28, tipo:'caminante'},
+        {x:460, y:160, vx:1.5, ancho:28, alto:28, tipo:'caminante'},
+      ],
+      monedas: [{x:140,y:265},{x:310,y:215},{x:490,y:155},{x:340,y:95}],
+      spawn: {x:40, y:310},
+    },
+    // Nivel 2 — más saltos
+    {
+      plataformas: [
+        {x:0,   y:360, w:200, h:40, tipo:'suelo'},
+        {x:440, y:360, w:200, h:40, tipo:'suelo'},
+        {x:60,  y:280, w:80,  h:14, tipo:'plat'},
+        {x:200, y:220, w:80,  h:14, tipo:'plat'},
+        {x:340, y:160, w:80,  h:14, tipo:'plat'},
+        {x:480, y:260, w:80,  h:14, tipo:'plat'},
+        {x:530, y:180, w:80,  h:14, tipo:'plat'},
+        {x:260, y:80,  w:120, h:14, tipo:'meta'},
+      ],
+      enemigos: [
+        {x:65,  y:260, vx:1.4, ancho:28, alto:28, tipo:'caminante'},
+        {x:345, y:140, vx:1.8, ancho:28, alto:28, tipo:'caminante'},
+        {x:485, y:240, vx:1.4, ancho:28, alto:28, tipo:'caminante'},
+      ],
+      monedas: [{x:90,y:255},{x:230,y:195},{x:375,y:135},{x:510,y:235},{x:555,y:155},{x:310,y:55}],
+      spawn: {x:30, y:310},
+    },
+    // Nivel 3 — plataformas móviles
+    {
+      plataformas: [
+        {x:0,   y:360, w:120, h:40, tipo:'suelo'},
+        {x:520, y:360, w:120, h:40, tipo:'suelo'},
+        {x:80,  y:290, w:80,  h:14, tipo:'movil', minX:80, maxX:220, vx:1.2},
+        {x:260, y:240, w:80,  h:14, tipo:'movil', minX:180, maxX:360, vx:1.6},
+        {x:400, y:180, w:80,  h:14, tipo:'movil', minX:360, maxX:500, vx:1.4},
+        {x:200, y:120, w:80,  h:14, tipo:'plat'},
+        {x:310, y:60,  w:120, h:14, tipo:'meta'},
+      ],
+      enemigos: [
+        {x:5,   y:340, vx:1.5, ancho:28, alto:28, tipo:'caminante'},
+        {x:525, y:340, vx:1.5, ancho:28, alto:28, tipo:'caminante'},
+      ],
+      monedas: [{x:110,y:265},{x:290,y:215},{x:430,y:155},{x:230,y:95},{x:350,y:35}],
+      spawn: {x:20, y:310},
+    },
+    // Nivel 4 — trampolines (plataformas que te lanzan alto)
+    {
+      plataformas: [
+        {x:0,   y:360, w:640, h:40, tipo:'suelo'},
+        {x:100, y:310, w:70,  h:14, tipo:'trampo'},
+        {x:280, y:260, w:70,  h:14, tipo:'trampo'},
+        {x:460, y:200, w:70,  h:14, tipo:'trampo'},
+        {x:160, y:160, w:90,  h:14, tipo:'plat'},
+        {x:380, y:100, w:90,  h:14, tipo:'plat'},
+        {x:260, y:30,  w:120, h:14, tipo:'meta'},
+      ],
+      enemigos: [
+        {x:50,  y:340, vx:1.6, ancho:28, alto:28, tipo:'caminante'},
+        {x:320, y:340, vx:1.8, ancho:28, alto:28, tipo:'caminante'},
+        {x:500, y:340, vx:1.6, ancho:28, alto:28, tipo:'caminante'},
+        {x:170, y:140, vx:1.5, ancho:28, alto:28, tipo:'caminante'},
+      ],
+      monedas: [{x:130,y:285},{x:310,y:235},{x:490,y:175},{x:200,y:135},{x:420,y:75},{x:300,y:5}],
+      spawn: {x:20, y:310},
+    },
+    // Nivel 5 — jefe final (enemigo grande rápido)
+    {
+      plataformas: [
+        {x:0,   y:360, w:640, h:40, tipo:'suelo'},
+        {x:80,  y:280, w:90,  h:14, tipo:'plat'},
+        {x:240, y:220, w:90,  h:14, tipo:'movil', minX:200, maxX:380, vx:2},
+        {x:450, y:260, w:90,  h:14, tipo:'plat'},
+        {x:150, y:150, w:90,  h:14, tipo:'plat'},
+        {x:380, y:140, w:90,  h:14, tipo:'movil', minX:300, maxX:520, vx:2.5},
+        {x:280, y:40,  w:140, h:14, tipo:'meta'},
+      ],
+      enemigos: [
+        {x:80,  y:340, vx:2.5, ancho:40, alto:40, tipo:'jefe'},
+        {x:400, y:340, vx:1.8, ancho:28, alto:28, tipo:'caminante'},
+        {x:160, y:130, vx:1.5, ancho:28, alto:28, tipo:'caminante'},
+        {x:390, y:120, vx:2.0, ancho:28, alto:28, tipo:'caminante'},
+      ],
+      monedas: [{x:110,y:255},{x:270,y:195},{x:480,y:235},{x:180,y:125},{x:415,y:115},{x:320,y:15},{x:340,y:15}],
+      spawn: {x:20, y:310},
+    },
+  ];
+
+  const idx   = Math.min(n - 1, niveles.length - 1);
+  const datos = JSON.parse(JSON.stringify(niveles[idx]));
+  return { ...datos, cfg };
+}
+
+// ── Jugador ──
+let p = {};
+function crearJugador(spawn) {
+  return {
+    x: spawn.x, y: spawn.y,
+    w: 28, h: 36,
+    vx: 0, vy: 0,
+    enSuelo: false,
+    saltos: 0,
+    saltoPres: false,
+    dir: 1,
+    invencible: 0,
+    animFrame: 0,
+  };
+}
+
+// ── Nivel actual ──
+let lvl = {};
+
+function iniciar() {
+  nivel = 1; score = 0; vidas = 3; coins = 0;
+  cargarNivel(nivel);
+  estado = 'jugando';
+  ocultarOverlay();
+}
+
+function cargarNivel(n) {
+  lvl = crearNivel(n);
+  p   = crearJugador(lvl.spawn);
+  actualizarHUD();
+}
+
+function reiniciarNivel() {
+  vidas--;
+  if (vidas <= 0) {
+    estado = 'fin';
+    mostrarOverlay('★ GAME OVER ★', 'Presiona ESPACIO para volver a empezar', '#ef5350');
+    return;
+  }
+  p = crearJugador(lvl.spawn);
+  actualizarHUD();
+  estado = 'jugando';
+  ocultarOverlay();
+}
+
+function siguienteNivel() {
+  nivel++;
+  if (nivel > 5) {
+    estado = 'fin';
+    mostrarOverlay('🏆 ¡GANASTE!', `Score final: ${score} — Presiona ESPACIO para reiniciar`, '#f9a825');
+    return;
+  }
+  cargarNivel(nivel);
+  estado = 'jugando';
+  ocultarOverlay();
+}
+
+function reiniciarJuego() {
+  nivel = 1; score = 0; vidas = 3; coins = 0;
+  cargarNivel(nivel);
+  estado = 'jugando';
+  ocultarOverlay();
+}
+
+// ── HUD ──
+function actualizarHUD() {
+  document.getElementById('nivel-val').textContent = nivel;
+  document.getElementById('score-val').textContent = score;
+  document.getElementById('coins-val').textContent = coins;
+  const v = ['♥','♥','♥'].map((h,i) => i < vidas ? h : '♡').join(' ');
+  document.getElementById('vidas-val').textContent = v;
+}
+
+// ── Overlay ──
+function mostrarOverlay(titulo, msg, color) {
+  const ov = document.getElementById('overlay');
+  document.getElementById('overlay-title').textContent = titulo;
+  document.getElementById('overlay-title').style.color = color || '#f9a825';
+  document.getElementById('overlay-msg').textContent   = msg;
+  ov.classList.remove('hidden');
+}
+function ocultarOverlay() {
+  document.getElementById('overlay').classList.add('hidden');
+}
+
+// ── FÍSICA ──
+const GRAV   = 0.5;
+const VELX   = 4;
+const SALTO  = -12;
+const TRAMPO = -18;
+
+function update() {
+  if (estado !== 'jugando') return;
+  frames++;
+
+  // Mover plataformas móviles
+  for (const pl of lvl.plataformas) {
+    if (pl.tipo === 'movil') {
+      pl.x += pl.vx;
+      if (pl.x < pl.minX || pl.x + pl.w > pl.maxX) pl.vx *= -1;
+    }
+  }
+
+  // Mover enemigos
+  for (const e of lvl.enemigos) {
+    e.x += e.vx;
+    // Rebotar en bordes de su plataforma o en bordes del nivel
+    let sobr = null;
+    for (const pl of lvl.plataformas) {
+      if (e.x + e.ancho > pl.x && e.x < pl.x + pl.w &&
+          e.y + e.alto >= pl.y && e.y + e.alto <= pl.y + 16) {
+        sobr = pl; break;
+      }
+    }
+    if (sobr) {
+      if (e.x <= sobr.x || e.x + e.ancho >= sobr.x + sobr.w) e.vx *= -1;
+    } else {
+      if (e.x < 0 || e.x + e.ancho > W) e.vx *= -1;
+    }
+  }
+
+  // Input jugador
+  if (keys['ArrowLeft'])  { p.vx = -VELX; p.dir = -1; }
+  else if (keys['ArrowRight']) { p.vx = VELX; p.dir = 1; }
+  else p.vx = 0;
+
+  const jumpBtn = keys['ArrowUp'] || keys['Space'];
+  if (jumpBtn && !p.saltoPres && p.saltos < 2) {
+    p.vy = SALTO;
+    p.saltos++;
+    p.saltoPres = true;
+  }
+  if (!jumpBtn) p.saltoPres = false;
+
+  // Gravedad
+  p.vy += GRAV;
+  p.x  += p.vx;
+  p.y  += p.vy;
+  p.animFrame = (p.animFrame + 1) % 20;
+
+  // Colisión con plataformas
+  p.enSuelo = false;
+  for (const pl of lvl.plataformas) {
+    if (p.x + p.w > pl.x && p.x < pl.x + pl.w) {
+      const py = p.y + p.h;
+      if (py >= pl.y && py - p.vy <= pl.y + 2 && p.vy >= 0) {
+        p.y = pl.y - p.h;
+        if (pl.tipo === 'trampo') {
+          p.vy = TRAMPO;
+          p.saltos = 0;
+          score += 5;
+        } else {
+          p.vy = 0;
+          p.enSuelo = true;
+          p.saltos  = 0;
+        }
+        if (pl.tipo === 'meta') {
+          estado = 'ganaste';
+          score += 200 * nivel;
+          actualizarHUD();
+          mostrarOverlay(`¡NIVEL ${nivel} COMPLETADO!`, 'Presiona ESPACIO para continuar', '#69f0ae');
+          return;
+        }
+      }
+    }
+  }
+
+  // Bordes horizontales
+  if (p.x < 0)      p.x = 0;
+  if (p.x + p.w > W) p.x = W - p.w;
+
+  // Caída al vacío
+  if (p.y > H + 50) {
+    estado = 'muerto';
+    mostrarOverlay('¡CAÍSTE!', 'Presiona ESPACIO para reintentar', '#ef5350');
+    return;
+  }
+
+  // Monedas
+  lvl.monedas = lvl.monedas.filter(m => {
+    const dx = p.x + p.w/2 - m.x;
+    const dy = p.y + p.h/2 - m.y;
+    if (Math.sqrt(dx*dx + dy*dy) < 20) {
+      coins++; score += 10;
+      actualizarHUD();
+      return false;
+    }
+    return true;
+  });
+
+  // Enemigos
+  if (p.invencible > 0) { p.invencible--; return; }
+  for (const e of lvl.enemigos) {
+    if (p.x + p.w > e.x + 4 && p.x < e.x + e.ancho - 4 &&
+        p.y + p.h > e.y + 4 && p.y < e.y + e.alto - 4) {
+      // Pisar enemigo (caer desde arriba)
+      if (p.vy > 0 && p.y + p.h < e.y + e.alto - 10) {
+        e.muerto = true;
+        p.vy = -8;
+        score += 50;
+        actualizarHUD();
+      } else {
+        p.invencible = 90;
+        vidas--;
+        actualizarHUD();
+        if (vidas <= 0) {
+          estado = 'fin';
+          mostrarOverlay('★ GAME OVER ★', 'Presiona ESPACIO para reiniciar', '#ef5350');
+        }
+      }
+      break;
+    }
+  }
+  lvl.enemigos = lvl.enemigos.filter(e => !e.muerto);
+  actualizarHUD();
+}
+
+// ── RENDER ──
+function draw() {
+  const cfg = lvl.cfg || paletas[0];
+
+  // Fondo
+  ctx.fillStyle = cfg.cielo;
+  ctx.fillRect(0, 0, W, H);
+
+  // Estrellas / fondo decorativo
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  for (let i = 0; i < 40; i++) {
+    const sx = (i * 137 + nivel * 23) % W;
+    const sy = (i * 89 + nivel * 17) % (H * 0.7);
+    const r  = (i % 3 === 0) ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Plataformas
+  for (const pl of lvl.plataformas) {
+    if (pl.tipo === 'suelo') {
+      ctx.fillStyle = cfg.suelo;
+      ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
+      // Hierba
+      ctx.fillStyle = cfg.plat;
+      ctx.fillRect(pl.x, pl.y, pl.w, 6);
+    } else if (pl.tipo === 'meta') {
+      ctx.fillStyle = '#f9a825';
+      ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
+      ctx.fillStyle = '#ffe082';
+      ctx.fillRect(pl.x + 4, pl.y, pl.w - 8, 4);
+      // Bandera
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(pl.x + pl.w/2, pl.y - 30, 3, 30);
+      ctx.fillStyle = '#ef5350';
+      ctx.fillRect(pl.x + pl.w/2 + 3, pl.y - 30, 20, 14);
+    } else if (pl.tipo === 'trampo') {
+      ctx.fillStyle = '#69f0ae';
+      ctx.fillRect(pl.x, pl.y + 6, pl.w, pl.h - 6);
+      ctx.fillStyle = '#00e676';
+      ctx.fillRect(pl.x, pl.y, pl.w, 8);
+      // Flecha arriba
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 12px monospace';
+      ctx.fillText('▲', pl.x + pl.w/2 - 6, pl.y - 2);
+    } else {
+      ctx.fillStyle = cfg.plat;
+      ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
+      ctx.fillStyle = cfg.platBorde;
+      ctx.fillRect(pl.x, pl.y, pl.w, 4);
+    }
+  }
+
+  // Monedas
+  for (const m of lvl.monedas) {
+    const bob = Math.sin(frames * 0.06 + m.x) * 3;
+    ctx.fillStyle = '#f9a825';
+    ctx.beginPath();
+    ctx.arc(m.x, m.y + bob, 7, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#ffe082';
+    ctx.beginPath();
+    ctx.arc(m.x - 2, m.y + bob - 2, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Enemigos
+  for (const e of lvl.enemigos) {
+    const esJefe = e.tipo === 'jefe';
+    // Cuerpo
+    ctx.fillStyle = esJefe ? '#d32f2f' : cfg.enemigo;
+    ctx.fillRect(e.x, e.y, e.ancho, e.alto);
+    // Ojos
+    ctx.fillStyle = '#fff';
+    const ew = esJefe ? 8 : 6;
+    const eh = esJefe ? 8 : 6;
+    ctx.fillRect(e.x + 4,           e.y + 6, ew, eh);
+    ctx.fillRect(e.x + e.ancho - 4 - ew, e.y + 6, ew, eh);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(e.x + 6,           e.y + 8, ew - 4, eh - 4);
+    ctx.fillRect(e.x + e.ancho - 4 - ew + 2, e.y + 8, ew - 4, eh - 4);
+    // Jefe: corona
+    if (esJefe) {
+      ctx.fillStyle = '#f9a825';
+      ctx.beginPath();
+      ctx.moveTo(e.x,            e.y);
+      ctx.lineTo(e.x + 8,        e.y - 10);
+      ctx.lineTo(e.x + e.ancho/2, e.y - 6);
+      ctx.lineTo(e.x + e.ancho - 8, e.y - 10);
+      ctx.lineTo(e.x + e.ancho,  e.y);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // Jugador
+  const px = Math.round(p.x), py = Math.round(p.y);
+  const parpadeo = p.invencible > 0 && Math.floor(frames / 5) % 2 === 0;
+  if (!parpadeo) {
+    // Cuerpo
+    ctx.fillStyle = '#1565c0';
+    ctx.fillRect(px, py + 12, p.w, p.h - 12);
+    // Cabeza
+    ctx.fillStyle = '#ffcc80';
+    ctx.fillRect(px + 4, py, p.w - 8, 14);
+    // Ojos
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(px + (p.dir > 0 ? 14 : 4), py + 3, 5, 5);
+    ctx.fillStyle = '#1a237e';
+    ctx.fillRect(px + (p.dir > 0 ? 16 : 5), py + 5, 3, 3);
+    // Gorra
+    ctx.fillStyle = '#e53935';
+    ctx.fillRect(px + 2, py - 4, p.w - 4, 6);
+    ctx.fillRect(px + (p.dir > 0 ? p.w - 8 : -2), py - 4, 10, 4);
+    // Piernas (animadas)
+    const leg = p.enSuelo ? Math.sin(frames * 0.3) * 4 : 0;
+    ctx.fillStyle = '#1565c0';
+    ctx.fillRect(px + 2,      py + p.h - 8 + leg,  10, 8);
+    ctx.fillRect(px + p.w - 12, py + p.h - 8 - leg, 10, 8);
+    // Zapatos
+    ctx.fillStyle = '#4e342e';
+    ctx.fillRect(px,          py + p.h - 4 + leg,  13, 5);
+    ctx.fillRect(px + p.w - 13, py + p.h - 4 - leg, 13, 5);
+  }
+
+  // UI de nivel sobre canvas
+  ctx.fillStyle = 'rgba(0,0,0,0.4)';
+  ctx.fillRect(8, 8, 110, 22);
+  ctx.fillStyle = '#f9a825';
+  ctx.font = '12px "Courier New"';
+  ctx.fillText(`NIVEL ${nivel} / 5`, 14, 23);
+}
+
+// ── LOOP ──
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// Inicializar
+mostrarOverlay('★ STAR JUMP ★', 'Presiona ESPACIO o ↑ para iniciar', '#f9a825');
+loop();
+</script>
+</body>
+</html>
