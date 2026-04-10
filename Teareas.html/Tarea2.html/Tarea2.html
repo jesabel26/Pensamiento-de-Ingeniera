@@ -13,11 +13,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StarJump - FUNCIONA</title>
+<title>StarJump - 12 NIVELES</title>
 <style>
 body{margin:0;background:#0a0a1a;display:flex;justify-content:center;align-items:center;height:100vh;font-family:monospace;color:white}
-canvas{border:2px solid #1a1a3a;border-radius:8px;image-rendering:pixelated}
-#overlay{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;flex-direction:column;background:rgba(0,0,0,0.8);cursor:pointer;font-size:18px}
+canvas{border:4px solid #ffd700;border-radius:12px;box-shadow:0 0 30px #ffd700;image-rendering:pixelated}
+#overlay{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;flex-direction:column;background:rgba(0,0,0,0.9);cursor:pointer;font-size:20px;text-align:center}
 .hidden{display:none}
 .wrap{position:relative}
 </style>
@@ -27,95 +27,162 @@ canvas{border:2px solid #1a1a3a;border-radius:8px;image-rendering:pixelated}
 <canvas id="c" width="640" height="400"></canvas>
 <div id="overlay">
 <h1>★ STAR JUMP ★</h1>
-<p>Click o ESPACIO para jugar<br>← → mover | ESPACIO subir (doble salto)</p>
+<p>Nivel <span id="nivelActual">1</span>/12<br>← → mover | ESPACIO doble salto</p>
+<button onclick="iniciar()" style="padding:15px 30px;font-size:18px;font-family:monospace;background:#ffd700;color:#000;border:none;border-radius:8px;cursor:pointer;margin-top:20px;font-weight:bold">▶ JUGAR</button>
 </div>
 </div>
 
 <script>
 const c=document.getElementById('c'),ctx=c.getContext('2d');
-let estado='inicio',keys={};
+let estado='inicio',keys={},nivelActual=1,puntos=0,marcadorMax=0;
 
-// ESTRELLAS
+// ESTRELLAS ANIMADAS
 const estrellas=[];
-for(let i=0;i<50;i++)estrellas.push({x:Math.random()*640,y:Math.random()*350});
+for(let i=0;i<80;i++)estrellas.push({x:Math.random()*640,y:Math.random()*350,vx:(Math.random()-0.5)*0.6});
 
 // JUGADOR
 let p={x:50,y:320,w:24,h:32,vx:0,vy:0,saltos:0};
 
-// PLATAFORMAS
-const plataformas=[
-  {x:0,y:368,w:640,h:32},     // suelo
-  {x:100,y:300,w:120,h:12},   // 1
-  {x:280,y:240,w:100,h:12},   // 2  
-  {x:450,y:180,w:100,h:12},   // 3
-  {x:320,y:120,w:140,h:16,meta:true} // META DORADA
+// 12 NIVELES PROGRESIVAMENTE MÁS DIFÍCILES
+const niveles=[
+  // NIVEL 1 - FÁCIL
+  [{x:0,y:368,w:640,h:32},{x:120,y:300,w:140,h:12},{x:320,y:240,w:120,h:12},{x:450,y:180,w:140,h:16,meta:true}],
+  
+  // NIVEL 2
+  [{x:0,y:368,w:640,h:32},{x:80,y:310,w:100,h:12},{x:250,y:260,w:80,h:12},{x:400,y:200,w:100,h:12},{x:500,y:140,w:120,h:16,meta:true}],
+  
+  // NIVEL 3
+  [{x:0,y:368,w:640,h:32},{x:60,y:320,w:80,h:12},{x:220,y:270,w:60,h:12},{x:350,y:210,w:70,h:12},{x:480,y:150,w:140,h:16,meta:true}],
+  
+  // NIVEL 4
+  [{x:0,y:368,w:640,h:32},{x:40,y:330,w:70,h:12},{x:180,y:280,w:60,h:12},{x:320,y:220,w:70,h:12},{x:450,y:160,w:160,h:20,meta:true}],
+  
+  // NIVEL 5
+  [{x:0,y:368,w:640,h:32},{x:30,y:340,w:60,h:12},{x:160,y:290,w:50,h:12},{x:300,y:230,w:60,h:12},{x:420,y:170,w:70,h:12},{x:520,y:110,w:100,h:20,meta:true}],
+  
+  // NIVEL 6 - PLATAFORMAS ESTRECHAS
+  [{x:0,y:368,w:640,h:32},{x:50,y:330,w:50,h:12},{x:150,y:280,w:45,h:12},{x:280,y:230,w:40,h:12},{x:400,y:180,w:45,h:12},{x:520,y:130,w:80,h:16,meta:true}],
+  
+  // NIVEL 7 - ZIGZAG
+  [{x:0,y:368,w:640,h:32},{x:70,y:320,w:60,h:12},{x:200,y:260,w:50,h:12},{x:100,y:200,w:60,h:12},{x:300,y:150,w:50,h:12},{x:450,y:110,w:100,h:18,meta:true}],
+  
+  // NIVEL 8 - ALTOS Y BAJOS
+  [{x:0,y:368,w:640,h:32},{x:40,y:340,w:50,h:12},{x:160,y:200,w:40,h:12},{x:320,y:300,w:50,h:12},{x:480,y:160,w:60,h:12},{x:550,y:100,w:70,h:18,meta:true}],
+  
+  // NIVEL 9 - POCO ESPACIO
+  [{x:0,y:368,w:640,h:32},{x:30,y:350,w:45,h:12},{x:120,y:310,w:40,h:12},{x:240,y:260,w:35,h:12},{x:370,y:210,w:40,h:12},{x:500,y:150,w:90,h:20,meta:true}],
+  
+  // NIVEL 10 - PRECISIÓN EXTREMA
+  [{x:0,y:368,w:640,h:32},{x:25,y:355,w:40,h:12},{x:130,y:300,w:35,h:12},{x:260,y:245,w:35,h:12},{x:390,y:190,w:35,h:12},{x:510,y:130,w:80,h:20,meta:true}],
+  
+  // NIVEL 11 - CASI IMPOSIBLE
+  [{x:0,y:368,w:640,h:32},{x:20,y:360,w:35,h:12},{x:110,y:320,w:30,h:12},{x:230,y:270,w:30,h:12},{x:360,y:220,w:30,h:12},{x:480,y:160,w:35,h:12},{x:560,y:105,w:60,h:22,meta:true}],
+  
+  // NIVEL 12 - EL FINAL
+  [{x:0,y:368,w:640,h:32},{x:15,y:365,w:30,h:12},{x:100,y:330,w:28,h:12},{x:210,y:285,w:28,h:12},{x:330,y:235,w:28,h:12},{x:450,y:185,w:28,h:12},{x:540,y:120,w:70,h:24,meta:true}]
 ];
 
-const gravedad=0.6;
+let plataformas=[];
+
+const gravedad=0.68;
 
 // INPUT
-document.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Space'&&estado==='inicio')iniciar()});
-document.addEventListener('keyup',e=>keys[e.code]=false);
+onkeydown=e=>{keys[e.code]=true;if(e.code==='Space'&&estado==='inicio')iniciar()};
+onkeyup=e=>keys[e.code]=false;
 document.getElementById('overlay').onclick=iniciar;
+
+function cargarNivel(n){
+  if(n>12) n=12;
+  plataformas=niveles[n-1];
+  p={x:50,y:320,w:24,h:32,vx:0,vy:0,saltos=0};
+  document.getElementById('nivelActual').textContent=n;
+}
 
 function iniciar(){
   estado='jugando';
   document.getElementById('overlay').classList.add('hidden');
-  p={x:50,y:320,w:24,h:32,vx:0,vy:0,saltos:0};
+  cargarNivel(1);puntos=0;
 }
 
 function update(){
   if(estado!=='jugando')return;
   
   // MOVIMIENTO
-  p.vx=keys['ArrowLeft']?-5:keys['ArrowRight']?5:0;
+  p.vx=keys['ArrowLeft']?-5.8:keys['ArrowRight']?5.8:p.vx*0.82;
   
-  // SALTO
+  // SALTO (más débil en niveles altos)
   if((keys['Space']||keys['ArrowUp'])&&p.saltos<2){
-    p.vy=-13;p.saltos++;keys['Space']=keys['ArrowUp']=false;
+    p.vy=-12.8-(nivelActual*0.08);
+    p.saltos++;keys['Space']=keys['ArrowUp']=false;
   }
   
-  // FISICA
   p.vy+=gravedad;p.x+=p.vx;p.y+=p.vy;
   
-  // COLLISIONES SIMPLES
+  // COLLISIONES
   let enSuelo=false;
   for(let pl of plataformas){
-    if(p.x+24>pl.x&&p.x<pl.x+pl.w&&
-       p.y+32>pl.y&&p.y+32<pl.y+20&&p.vy>=0){
+    if(p.x+24>pl.x&&p.x<pl.x+pl.w&&p.y+32>pl.y&&p.y+32<pl.y+25&&p.vy>=0){
       p.y=pl.y-32;p.vy=0;enSuelo=true;p.saltos=0;
-      if(pl.meta){estado='win';setTimeout(()=>alert('🎉 GANASTE! 🎉'),200);return;}
+      if(pl.meta){
+        puntos+=150*nivelActual;
+        if(nivelActual<12){
+          nivelActual++;
+          setTimeout(()=>cargarNivel(nivelActual),600);
+        }else{
+          estado='win';marcadorMax=Math.max(marcadorMax,puntos);
+          setTimeout(()=>alert(`🏆 ¡LEYENDA!\nPuntos: ${puntos}\nRecord: ${marcadorMax}`),400);
+        }
+        return;
+      }
     }
   }
   
-  // BORDES
+  // BORDES + PENALIZACIÓN
   p.x=Math.max(0,Math.min(616,p.x));
-  if(p.y>450){p.x=50;p.y=320;p.vy=0;p.saltos=0;} // RESET
+  if(p.y>465){
+    puntos-=30*nivelActual;
+    p={x:50,y:320,vx:0,vy=0,saltos=0};
+  }
 }
 
 function draw(){
   // FONDO
   ctx.fillStyle='#0a0a1a';ctx.fillRect(0,0,640,400);
-  
-  // ESTRELLAS
-  ctx.fillStyle='#fff';
-  estrellas.forEach(s=>ctx.fillRect(s.x,s.y,2,2));
+  estrellas.forEach(s=>{
+    s.x+=s.vx;s.x<0?s.x=640:s.x>640&&(s.x=0);
+    ctx.fillStyle='#fff';ctx.fillRect(s.x,s.y,2,2);
+  });
   
   // PLATAFORMAS
-  plataformas.forEach(pl=>{
-    ctx.fillStyle=pl.meta?'#ffd700':'#4caf50';
-    ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
-    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.strokeRect(pl.x,pl.y,pl.w,pl.h);
+  plataformas.forEach((pl,i)=>{
+    const grad=ctx.createLinearGradient(pl.x,pl.y,pl.x+pl.w,pl.y+pl.h);
+    grad.addColorStop(0,pl.meta?'#ffd700':'#4caf50');
+    grad.addColorStop(1,pl.meta?'#ff8f00':'#2e7d32');
+    ctx.fillStyle=grad;ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
+    ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.strokeRect(pl.x,pl.y,pl.w,pl.h);
   });
   
   // JUGADOR
+  ctx.save();
+  ctx.shadowColor='#2196f3';ctx.shadowBlur=20;
   ctx.fillStyle='#2196f3';ctx.fillRect(p.x,p.y,p.w,p.h);
+  ctx.restore();
+  
+  // UI
+  ctx.fillStyle='#fff';ctx.font='bold 20px monospace';
+  ctx.fillText(`Nivel ${nivelActual}/12`,10,30);
+  ctx.fillText(`Puntos: ${puntos}`,10,58);
+  ctx.fillText(`Record: ${marcadorMax}`,10,85);
   ctx.fillStyle=p.saltos<2?'#bbdefb':'#f44336';
-  ctx.font='bold 14px monospace';ctx.fillText('Saltos: '+(2-p.saltos),10,25);
+  ctx.font='bold 16px monospace';
+  ctx.fillText(`Saltos: ${2-p.saltos}`,500,30);
   
   if(estado==='win'){
-    ctx.fillStyle='rgba(255,255,255,0.8)';
-    ctx.fillRect(0,0,640,400);
+    ctx.fillStyle='rgba(255,215,0,0.95)';ctx.fillRect(0,0,640,400);
+    ctx.fillStyle='#000';ctx.font='bold 48px monospace';ctx.textAlign='center';
+    ctx.fillText('¡🏆 CAMPEÓN! 🏆',320,190);
+    ctx.font='bold 24px monospace';
+    ctx.fillText(`Puntos Finales: ${puntos}`,320,240);
   }
 }
 
