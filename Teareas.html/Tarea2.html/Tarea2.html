@@ -13,7 +13,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StarJump - 12 NIVELES CORREGIDO</title>
+<title>StarJump - 12 NIVELES FUNCIONA</title>
 <style>
 body{margin:0;background:#0a0a1a;display:flex;justify-content:center;align-items:center;height:100vh;font-family:monospace;color:white}
 canvas{border:4px solid #ffd700;border-radius:12px;box-shadow:0 0 30px #ffd700;image-rendering:pixelated}
@@ -28,16 +28,15 @@ canvas{border:4px solid #ffd700;border-radius:12px;box-shadow:0 0 30px #ffd700;i
 <div id="overlay">
 <h1>★ STAR JUMP ★</h1>
 <p>Nivel <span id="nivelActual">1</span>/12<br>← → mover | ESPACIO doble salto</p>
-<button id="btnJugar" onclick="iniciar()" style="padding:15px 30px;font-size:18px;font-family:monospace;background:#ffd700;color:#000;border:none;border-radius:8px;cursor:pointer;margin-top:20px;font-weight:bold">▶ JUGAR</button>
+<button id="btnJugar" onclick="iniciar()">▶ JUGAR</button>
 </div>
 </div>
 
 <script>
 const c=document.getElementById('c'),ctx=c.getContext('2d');
 let estado='inicio',keys={},nivelActual=1,puntos=0,marcadorMax=0;
-const overlay = document.getElementById('overlay');
-const btnJugar = document.getElementById('btnJugar');
-const nivelSpan = document.getElementById('nivelActual');
+const overlay=document.getElementById('overlay');
+const nivelSpan=document.getElementById('nivelActual');
 
 // ESTRELLAS
 const estrellas=[];
@@ -63,18 +62,21 @@ const niveles=[
 ];
 
 let plataformas=[];
+let avanzarNivel=false;
 const gravedad=0.68;
 
 function cargarNivel(n){
+  if(n>12)n=12;
   plataformas=niveles[n-1];
   p.x=50;p.y=320;p.vx=0;p.vy=0;p.saltos=0;
   nivelSpan.textContent=n;
+  estado='jugando'; // Mantiene jugando
 }
 
 function iniciar(){
   estado='jugando';
   overlay.classList.add('hidden');
-  nivelActual=1;puntos=0;
+  nivelActual=1;puntos=0;marcadorMax=0;
   cargarNivel(1);
 }
 
@@ -88,35 +90,46 @@ overlay.onclick=iniciar;
 function update(){
   if(estado!=='jugando')return;
   
+  // MOVIMIENTO
   p.vx=keys['ArrowLeft']?-5.8:keys['ArrowRight']?5.8:p.vx*0.82;
   
+  // SALTO
   if((keys['Space']||keys['ArrowUp'])&&p.saltos<2){
-    p.vy=-12.8-(nivelActual*0.08);p.saltos++;keys['Space']=keys['ArrowUp']=false;
+    p.vy=-12.8;p.saltos++;keys['Space']=keys['ArrowUp']=false;
   }
   
   p.vy+=gravedad;p.x+=p.vx;p.y+=p.vy;
   
-  let enSuelo=false;
+  // COLLISIONES - CORREGIDO
   for(let pl of plataformas){
-    if(p.x+24>pl.x&&p.x<pl.x+pl.w&&p.y+32>pl.y&&p.y+32<pl.y+25&&p.vy>=0){
-      p.y=pl.y-32;p.vy=0;enSuelo=true;p.saltos=0;
+    // Detectar si toca CUALQUIER parte de la plataforma
+    if(p.vy>=0 && p.x+24>pl.x && p.x<pl.x+pl.w && 
+       p.y+32>=pl.y-5 && p.y+32<=pl.y+20){
+      
+      p.y=pl.y-32;p.vy=0;p.saltos=0;
+      
+      // GANAR NIVEL
       if(pl.meta){
         puntos+=150*nivelActual;
         if(nivelActual<12){
           nivelActual++;
           setTimeout(()=>{
             cargarNivel(nivelActual);
-          },800);
+          },1000);
         }else{
           estado='win';
           marcadorMax=Math.max(marcadorMax,puntos);
-          setTimeout(()=>alert(`🏆 ¡LEYENDA!\nPuntos: ${puntos}\nRecord: ${marcadorMax}`),400);
+          setTimeout(()=>{
+            overlay.classList.remove('hidden');
+            overlay.innerHTML=`<h1>🏆 ¡LEYENDA ABSOLUTA! 🏆</h1><p>Puntos: ${puntos}<br>Record: ${marcadorMax}</p><button onclick="location.reload()">🔄 JUGAR NUEVO</button>`;
+          },500);
         }
         return;
       }
     }
   }
   
+  // BORDES Y RESET
   p.x=Math.max(0,Math.min(616,p.x));
   if(p.y>465){
     puntos-=30*nivelActual;
@@ -127,11 +140,15 @@ function update(){
 function draw(){
   ctx.fillStyle='#0a0a1a';ctx.fillRect(0,0,640,400);
   
+  // ESTRELLAS
   estrellas.forEach(s=>{
-    s.x+=s.vx;s.x<0?s.x=640:s.x>640&&(s.x=0);
+    s.x+=s.vx;
+    if(s.x<0)s.x=640;
+    if(s.x>640)s.x=0;
     ctx.fillStyle='#fff';ctx.fillRect(s.x,s.y,2,2);
   });
   
+  // PLATAFORMAS
   plataformas.forEach(pl=>{
     const grad=ctx.createLinearGradient(pl.x,pl.y,pl.x+pl.w,pl.y+pl.h);
     grad.addColorStop(0,pl.meta?'#ffd700':'#4caf50');
@@ -140,32 +157,26 @@ function draw(){
     ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.strokeRect(pl.x,pl.y,pl.w,pl.h);
   });
   
+  // JUGADOR
   ctx.save();
   ctx.shadowColor='#2196f3';ctx.shadowBlur=20;
   ctx.fillStyle='#2196f3';ctx.fillRect(p.x,p.y,p.w,p.h);
   ctx.restore();
   
+  // UI
   ctx.fillStyle='#fff';ctx.font='bold 20px monospace';
+  ctx.textAlign='left';
   ctx.fillText(`Nivel ${nivelActual}/12`,10,30);
   ctx.fillText(`Puntos: ${puntos}`,10,58);
   ctx.fillText(`Record: ${marcadorMax}`,10,85);
   ctx.fillStyle=p.saltos<2?'#bbdefb':'#f44336';
   ctx.font='bold 16px monospace';
   ctx.fillText(`Saltos: ${2-p.saltos}`,500,30);
-  
-  if(estado==='win'){
-    ctx.fillStyle='rgba(255,215,0,0.95)';ctx.fillRect(0,0,640,400);
-    ctx.fillStyle='#000';ctx.font='bold 48px monospace';ctx.textAlign='center';
-    ctx.fillText('¡🏆 CAMPEÓN! 🏆',320,190);
-    ctx.font='bold 24px monospace';
-    ctx.fillText(`Puntos Finales: ${puntos}`,320,240);
-  }
+  ctx.textAlign='left';
 }
 
 function loop(){update();draw();requestAnimationFrame(loop);}
 loop();
 </script>
 </body>
-<a href="index.html">⬅ Volver al menú</a>
-<a href="Tareas.html">⬅ Volver a tareas</a>
 </html>
