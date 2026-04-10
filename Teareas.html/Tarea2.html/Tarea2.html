@@ -13,231 +13,114 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StarJump - Corregido</title>
-
+<title>StarJump - FUNCIONA</title>
 <style>
-body{
-  margin:0;
-  background:#0a0a1a;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  height:100vh;
-  font-family:monospace;
-  color:white;
-}
-
-canvas{
-  border:2px solid #1a1a3a;
-  border-radius:8px;
-  image-rendering: pixelated;
-}
-
-#overlay{
-  position:absolute;
-  inset:0;
-  display:flex;
-  justify-content:center;
-  align-items:center;
-  flex-direction:column;
-  background:rgba(0,0,0,0.7);
-  cursor:pointer;
-}
-
-.hidden{ display:none; }
-.wrap{ position:relative; }
+body{margin:0;background:#0a0a1a;display:flex;justify-content:center;align-items:center;height:100vh;font-family:monospace;color:white}
+canvas{border:2px solid #1a1a3a;border-radius:8px;image-rendering:pixelated}
+#overlay{position:absolute;inset:0;display:flex;justify-content:center;align-items:center;flex-direction:column;background:rgba(0,0,0,0.8);cursor:pointer;font-size:18px}
+.hidden{display:none}
+.wrap{position:relative}
 </style>
 </head>
-
 <body>
-
 <div class="wrap">
-  <canvas id="c" width="640" height="400"></canvas>
-
-  <div id="overlay">
-    <h1>★ STAR JUMP ★</h1>
-    <p>Click o presiona ESPACIO para jugar<br>FLECHAS ← → para mover, ESPACIO/Arriba para saltar (doble salto)</p>
-  </div>
+<canvas id="c" width="640" height="400"></canvas>
+<div id="overlay">
+<h1>★ STAR JUMP ★</h1>
+<p>Click o ESPACIO para jugar<br>← → mover | ESPACIO subir (doble salto)</p>
+</div>
 </div>
 
 <script>
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+const c=document.getElementById('c'),ctx=c.getContext('2d');
+let estado='inicio',keys={};
 
-let estado = 'inicio';
+// ESTRELLAS
+const estrellas=[];
+for(let i=0;i<50;i++)estrellas.push({x:Math.random()*640,y:Math.random()*350});
 
-/* ⭐ ESTRELLAS OPTIMIZADAS */
-const estrellas = [];
-for(let i=0;i<40;i++){
-  estrellas.push({
-    x: Math.random()*640,
-    y: Math.random()*300
-  });
-}
+// JUGADOR
+let p={x:50,y:320,w:24,h:32,vx:0,vy:0,saltos:0};
 
-/* 👤 JUGADOR */
-let p = {
-  x:50, y:300,
-  w:30, h:35,
-  vx:0, vy:0,
-  saltos:0,
-  enSuelo:false
-};
-
-const gravedad = 0.5;
-
-/* 🧱 PLATAFORMAS */
-const plataformas = [
-  {x:0,y:360,w:640,h:40},
-  {x:120,y:280,w:100,h:10},
-  {x:300,y:220,w:100,h:10},
-  {x:480,y:160,w:100,h:10},
-  {x:300,y:100,w:120,h:10, meta:true}
+// PLATAFORMAS
+const plataformas=[
+  {x:0,y:368,w:640,h:32},     // suelo
+  {x:100,y:300,w:120,h:12},   // 1
+  {x:280,y:240,w:100,h:12},   // 2  
+  {x:450,y:180,w:100,h:12},   // 3
+  {x:320,y:120,w:140,h:16,meta:true} // META DORADA
 ];
 
-/* 🎮 INPUT */
-const keys = {};
+const gravedad=0.6;
 
-document.addEventListener('keydown', e=>{
-  keys[e.code]=true;
-
-  if(e.code==='Space' && estado==='inicio'){
-    iniciar();
-  }
-});
-
-document.addEventListener('keyup', e=>{
-  keys[e.code]=false;
-});
-
-/* CLICK INICIO */
-document.getElementById('overlay').onclick = iniciar;
+// INPUT
+document.addEventListener('keydown',e=>{keys[e.code]=true;if(e.code==='Space'&&estado==='inicio')iniciar()});
+document.addEventListener('keyup',e=>keys[e.code]=false);
+document.getElementById('overlay').onclick=iniciar;
 
 function iniciar(){
   estado='jugando';
   document.getElementById('overlay').classList.add('hidden');
-  // Reset jugador
-  p.x = 50;
-  p.y = 300;
-  p.vx = 0;
-  p.vy = 0;
-  p.saltos = 0;
-  p.enSuelo = false;
+  p={x:50,y:320,w:24,h:32,vx:0,vy:0,saltos:0};
 }
 
-/* 🔄 UPDATE */
 function update(){
-  if(estado!=='jugando') return;
-
-  // Movimiento horizontal
-  if(keys['ArrowLeft']) p.vx = -4;
-  else if(keys['ArrowRight']) p.vx = 4;
-  else p.vx *= 0.8; // Fricción
-
-  // Salto (doble salto)
-  if((keys['Space'] || keys['ArrowUp']) && p.saltos < 2){
-    p.vy = -12;
-    p.saltos++;
-    // Prevenir múltiples saltos en el mismo frame
-    keys['Space'] = false;
-    keys['ArrowUp'] = false;
-  }
-
-  // Gravedad
-  p.vy += gravedad;
+  if(estado!=='jugando')return;
   
-  // Actualizar posición
-  p.x += p.vx;
-  p.y += p.vy;
-
-  p.enSuelo = false;
-  p.saltos = 1; // Permitir solo 1 salto en el aire por defecto
-
-  // Colisiones con plataformas (CORREGIDO)
+  // MOVIMIENTO
+  p.vx=keys['ArrowLeft']?-5:keys['ArrowRight']?5:0;
+  
+  // SALTO
+  if((keys['Space']||keys['ArrowUp'])&&p.saltos<2){
+    p.vy=-13;p.saltos++;keys['Space']=keys['ArrowUp']=false;
+  }
+  
+  // FISICA
+  p.vy+=gravedad;p.x+=p.vx;p.y+=p.vy;
+  
+  // COLLISIONES SIMPLES
+  let enSuelo=false;
   for(let pl of plataformas){
-    // Colisión horizontal primero
-    if(p.x < pl.x + pl.w && 
-       p.x + p.w > pl.x &&
-       p.y + p.h > pl.y &&
-       p.y + p.h < pl.y + pl.h + p.vy){
-      
-      // Aterrizaje desde arriba
-      if(p.vy >= 0){
-        p.y = pl.y - p.h;
-        p.vy = 0;
-        p.enSuelo = true;
-        p.saltos = 0; // Reset saltos al tocar suelo
-        
-        if(pl.meta){
-          estado = 'ganaste';
-          setTimeout(() => {
-            alert('🎉 ¡GANASTE! 🎉');
-            location.reload();
-          }, 100);
-        }
-      }
+    if(p.x+24>pl.x&&p.x<pl.x+pl.w&&
+       p.y+32>pl.y&&p.y+32<pl.y+20&&p.vy>=0){
+      p.y=pl.y-32;p.vy=0;enSuelo=true;p.saltos=0;
+      if(pl.meta){estado='win';setTimeout(()=>alert('🎉 GANASTE! 🎉'),200);return;}
     }
   }
-
-  // Bordes laterales
-  if(p.x < 0) p.x = 0;
-  if(p.x + p.w > 640) p.x = 640 - p.w;
-
-  // Borde inferior (reset)
-  if(p.y > 450){
-    p.x = 50;
-    p.y = 300;
-    p.vx = 0;
-    p.vy = 0;
-    p.saltos = 0;
-  }
-}
-
-/* 🎨 DRAW */
-function draw(){
-  // Fondo
-  ctx.fillStyle = '#0d0d2b';
-  ctx.fillRect(0, 0, 640, 400);
-
-  // Estrellas
-  ctx.fillStyle = '#fff';
-  for(let s of estrellas){
-    ctx.fillRect(s.x, s.y, 2, 2);
-  }
-
-  // Plataformas
-  for(let pl of plataformas){
-    ctx.fillStyle = pl.meta ? '#f9a825' : '#2e7d32';
-    ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
-    
-    // Borde de plataformas
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(pl.x, pl.y, pl.w, pl.h);
-  }
-
-  // Jugador (azul con sombra)
-  ctx.shadowColor = '#4fc3f7';
-  ctx.shadowBlur = 10;
-  ctx.fillStyle = '#4fc3f7';
-  ctx.fillRect(p.x, p.y, p.w, p.h);
-  ctx.shadowBlur = 0;
   
-  // Indicador de saltos restantes
-  ctx.fillStyle = p.saltos < 2 ? '#90caf9' : '#ff5722';
-  ctx.font = '12px monospace';
-  ctx.fillText(`Saltos: ${2 - p.saltos}`, 10, 30);
+  // BORDES
+  p.x=Math.max(0,Math.min(616,p.x));
+  if(p.y>450){p.x=50;p.y=320;p.vy=0;p.saltos=0;} // RESET
 }
 
-/* 🔁 LOOP */
-function loop(){
-  update();
-  draw();
-  requestAnimationFrame(loop);
+function draw(){
+  // FONDO
+  ctx.fillStyle='#0a0a1a';ctx.fillRect(0,0,640,400);
+  
+  // ESTRELLAS
+  ctx.fillStyle='#fff';
+  estrellas.forEach(s=>ctx.fillRect(s.x,s.y,2,2));
+  
+  // PLATAFORMAS
+  plataformas.forEach(pl=>{
+    ctx.fillStyle=pl.meta?'#ffd700':'#4caf50';
+    ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
+    ctx.strokeStyle='#fff';ctx.lineWidth=1;ctx.strokeRect(pl.x,pl.y,pl.w,pl.h);
+  });
+  
+  // JUGADOR
+  ctx.fillStyle='#2196f3';ctx.fillRect(p.x,p.y,p.w,p.h);
+  ctx.fillStyle=p.saltos<2?'#bbdefb':'#f44336';
+  ctx.font='bold 14px monospace';ctx.fillText('Saltos: '+(2-p.saltos),10,25);
+  
+  if(estado==='win'){
+    ctx.fillStyle='rgba(255,255,255,0.8)';
+    ctx.fillRect(0,0,640,400);
+  }
 }
 
+function loop(){update();draw();requestAnimationFrame(loop);}
 loop();
 </script>
-
 </body>
 </html>
