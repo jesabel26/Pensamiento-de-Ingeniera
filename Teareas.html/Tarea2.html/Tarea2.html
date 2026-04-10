@@ -13,56 +13,45 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StarJump PRO</title>
+<title>StarJump</title>
 
 <style>
-* { margin:0; padding:0; box-sizing:border-box; }
-
-body {
+body{
+  margin:0;
   background:#0a0a1a;
   display:flex;
-  flex-direction:column;
-  align-items:center;
   justify-content:center;
-  min-height:100vh;
-  color:#fff;
+  align-items:center;
+  height:100vh;
   font-family:monospace;
+  color:white;
 }
 
-/* HUD */
-#hud { display:flex; gap:30px; margin-bottom:10px; }
-
-/* Canvas */
-canvas {
+canvas{
   border:2px solid #1a1a3a;
   border-radius:8px;
+  image-rendering: pixelated;
 }
 
-/* Overlay */
-#overlay {
+#overlay{
   position:absolute;
   inset:0;
   display:flex;
-  flex-direction:column;
-  align-items:center;
   justify-content:center;
+  align-items:center;
+  flex-direction:column;
   background:rgba(0,0,0,0.7);
   cursor:pointer;
 }
-.hidden { display:none; }
 
-.overlay-wrap { position:relative; }
+.hidden{ display:none; }
+.wrap{ position:relative; }
 </style>
 </head>
 
 <body>
 
-<div id="hud">
-  Nivel: <span id="nivel">1</span>
-  Score: <span id="score">0</span>
-</div>
-
-<div class="overlay-wrap">
+<div class="wrap">
   <canvas id="c" width="640" height="400"></canvas>
 
   <div id="overlay">
@@ -76,9 +65,17 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 let estado = 'inicio';
-let score = 0;
 
-/* jugador */
+/* ⭐ ESTRELLAS OPTIMIZADAS */
+const estrellas = [];
+for(let i=0;i<40;i++){
+  estrellas.push({
+    x: Math.random()*640,
+    y: Math.random()*300
+  });
+}
+
+/* 👤 JUGADOR */
 let p = {
   x:50, y:300,
   w:30, h:35,
@@ -89,7 +86,7 @@ let p = {
 
 const gravedad = 0.5;
 
-/* plataformas */
+/* 🧱 PLATAFORMAS */
 const plataformas = [
   {x:0,y:360,w:640,h:40},
   {x:120,y:280,w:100,h:10},
@@ -98,7 +95,7 @@ const plataformas = [
   {x:300,y:100,w:120,h:10, meta:true}
 ];
 
-/* INPUT */
+/* 🎮 INPUT */
 const keys = {};
 
 document.addEventListener('keydown', e=>{
@@ -113,16 +110,15 @@ document.addEventListener('keyup', e=>{
   keys[e.code]=false;
 });
 
-/* overlay click */
+/* CLICK INICIO */
 document.getElementById('overlay').onclick = iniciar;
 
-/* iniciar */
 function iniciar(){
   estado='jugando';
   document.getElementById('overlay').classList.add('hidden');
 }
 
-/* UPDATE */
+/* 🔄 UPDATE */
 function update(){
   if(estado!=='jugando') return;
 
@@ -131,7 +127,7 @@ function update(){
   else if(keys['ArrowRight']) p.vx=4;
   else p.vx=0;
 
-  // salto doble
+  // doble salto
   if((keys['Space']||keys['ArrowUp']) && p.saltos<2){
     p.vy=-10;
     p.saltos++;
@@ -143,20 +139,20 @@ function update(){
   p.x+=p.vx;
   p.y+=p.vy;
 
-  // colisiones
   p.enSuelo=false;
 
+  // colisiones
   for(let pl of plataformas){
-    if(p.x<p.w+pl.x && p.x+p.w>pl.x){
-      if(p.y+p.h>=pl.y && p.y+p.h<=pl.y+10 && p.vy>=0){
-        p.y=pl.y-p.h;
-        p.vy=0;
-        p.enSuelo=true;
-        p.saltos=0;
+    if(p.x < pl.x + pl.w && p.x + p.w > pl.x){
+      if(p.y + p.h >= pl.y && p.y + p.h <= pl.y + 10 && p.vy >= 0){
+        p.y = pl.y - p.h;
+        p.vy = 0;
+        p.enSuelo = true;
+        p.saltos = 0;
 
         if(pl.meta){
           estado='ganaste';
-          alert('GANASTE 🎉');
+          alert('🎉 GANASTE');
         }
       }
     }
@@ -166,35 +162,36 @@ function update(){
   if(p.x<0) p.x=0;
   if(p.x+p.w>640) p.x=640-p.w;
 
-  // caer
+  // caída
   if(p.y>450){
-    p.x=50; p.y=300;
+    p.x=50;
+    p.y=300;
   }
 }
 
-/* DRAW */
+/* 🎨 DRAW */
 function draw(){
   ctx.fillStyle='#0d0d2b';
   ctx.fillRect(0,0,640,400);
 
-  // estrellas
+  // estrellas (sin lag)
   ctx.fillStyle='#fff';
-  for(let i=0;i<40;i++){
-    ctx.fillRect(Math.random()*640,Math.random()*300,2,2);
+  for(let s of estrellas){
+    ctx.fillRect(s.x, s.y, 2, 2);
   }
 
   // plataformas
   for(let pl of plataformas){
-    ctx.fillStyle=pl.meta?'#f9a825':'#2e7d32';
-    ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
+    ctx.fillStyle = pl.meta ? '#f9a825' : '#2e7d32';
+    ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
   }
 
   // jugador
   ctx.fillStyle='#4fc3f7';
-  ctx.fillRect(p.x,p.y,p.w,p.h);
+  ctx.fillRect(p.x, p.y, p.w, p.h);
 }
 
-/* LOOP */
+/* 🔁 LOOP */
 function loop(){
   update();
   draw();
