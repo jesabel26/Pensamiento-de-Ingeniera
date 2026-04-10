@@ -13,7 +13,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StarJump</title>
+<title>StarJump - Corregido</title>
 
 <style>
 body{
@@ -56,7 +56,7 @@ canvas{
 
   <div id="overlay">
     <h1>★ STAR JUMP ★</h1>
-    <p>Click o presiona ESPACIO</p>
+    <p>Click o presiona ESPACIO para jugar<br>FLECHAS ← → para mover, ESPACIO/Arriba para saltar (doble salto)</p>
   </div>
 </div>
 
@@ -116,79 +116,117 @@ document.getElementById('overlay').onclick = iniciar;
 function iniciar(){
   estado='jugando';
   document.getElementById('overlay').classList.add('hidden');
+  // Reset jugador
+  p.x = 50;
+  p.y = 300;
+  p.vx = 0;
+  p.vy = 0;
+  p.saltos = 0;
+  p.enSuelo = false;
 }
 
 /* 🔄 UPDATE */
 function update(){
   if(estado!=='jugando') return;
 
-  // movimiento
-  if(keys['ArrowLeft']) p.vx=-4;
-  else if(keys['ArrowRight']) p.vx=4;
-  else p.vx=0;
+  // Movimiento horizontal
+  if(keys['ArrowLeft']) p.vx = -4;
+  else if(keys['ArrowRight']) p.vx = 4;
+  else p.vx *= 0.8; // Fricción
 
-  // doble salto
-  if((keys['Space']||keys['ArrowUp']) && p.saltos<2){
-    p.vy=-10;
+  // Salto (doble salto)
+  if((keys['Space'] || keys['ArrowUp']) && p.saltos < 2){
+    p.vy = -12;
     p.saltos++;
-    keys['Space']=false;
+    // Prevenir múltiples saltos en el mismo frame
+    keys['Space'] = false;
+    keys['ArrowUp'] = false;
   }
 
-  // gravedad
-  p.vy+=gravedad;
-  p.x+=p.vx;
-  p.y+=p.vy;
+  // Gravedad
+  p.vy += gravedad;
+  
+  // Actualizar posición
+  p.x += p.vx;
+  p.y += p.vy;
 
-  p.enSuelo=false;
+  p.enSuelo = false;
+  p.saltos = 1; // Permitir solo 1 salto en el aire por defecto
 
-  // colisiones
+  // Colisiones con plataformas (CORREGIDO)
   for(let pl of plataformas){
-    if(p.x < pl.x + pl.w && p.x + p.w > pl.x){
-      if(p.y + p.h >= pl.y && p.y + p.h <= pl.y + 10 && p.vy >= 0){
+    // Colisión horizontal primero
+    if(p.x < pl.x + pl.w && 
+       p.x + p.w > pl.x &&
+       p.y + p.h > pl.y &&
+       p.y + p.h < pl.y + pl.h + p.vy){
+      
+      // Aterrizaje desde arriba
+      if(p.vy >= 0){
         p.y = pl.y - p.h;
         p.vy = 0;
         p.enSuelo = true;
-        p.saltos = 0;
-
+        p.saltos = 0; // Reset saltos al tocar suelo
+        
         if(pl.meta){
-          estado='ganaste';
-          alert('🎉 GANASTE');
+          estado = 'ganaste';
+          setTimeout(() => {
+            alert('🎉 ¡GANASTE! 🎉');
+            location.reload();
+          }, 100);
         }
       }
     }
   }
 
-  // bordes
-  if(p.x<0) p.x=0;
-  if(p.x+p.w>640) p.x=640-p.w;
+  // Bordes laterales
+  if(p.x < 0) p.x = 0;
+  if(p.x + p.w > 640) p.x = 640 - p.w;
 
-  // caída
-  if(p.y>450){
-    p.x=50;
-    p.y=300;
+  // Borde inferior (reset)
+  if(p.y > 450){
+    p.x = 50;
+    p.y = 300;
+    p.vx = 0;
+    p.vy = 0;
+    p.saltos = 0;
   }
 }
 
 /* 🎨 DRAW */
 function draw(){
-  ctx.fillStyle='#0d0d2b';
-  ctx.fillRect(0,0,640,400);
+  // Fondo
+  ctx.fillStyle = '#0d0d2b';
+  ctx.fillRect(0, 0, 640, 400);
 
-  // estrellas (sin lag)
-  ctx.fillStyle='#fff';
+  // Estrellas
+  ctx.fillStyle = '#fff';
   for(let s of estrellas){
     ctx.fillRect(s.x, s.y, 2, 2);
   }
 
-  // plataformas
+  // Plataformas
   for(let pl of plataformas){
     ctx.fillStyle = pl.meta ? '#f9a825' : '#2e7d32';
     ctx.fillRect(pl.x, pl.y, pl.w, pl.h);
+    
+    // Borde de plataformas
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(pl.x, pl.y, pl.w, pl.h);
   }
 
-  // jugador
-  ctx.fillStyle='#4fc3f7';
+  // Jugador (azul con sombra)
+  ctx.shadowColor = '#4fc3f7';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = '#4fc3f7';
   ctx.fillRect(p.x, p.y, p.w, p.h);
+  ctx.shadowBlur = 0;
+  
+  // Indicador de saltos restantes
+  ctx.fillStyle = p.saltos < 2 ? '#90caf9' : '#ff5722';
+  ctx.font = '12px monospace';
+  ctx.fillText(`Saltos: ${2 - p.saltos}`, 10, 30);
 }
 
 /* 🔁 LOOP */
