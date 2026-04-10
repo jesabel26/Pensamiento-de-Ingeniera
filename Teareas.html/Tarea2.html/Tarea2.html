@@ -13,7 +13,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>StarJump — Videojuego</title>
+<title>StarJump PRO</title>
 
 <style>
 * { margin:0; padding:0; box-sizing:border-box; }
@@ -25,13 +25,12 @@ body {
   align-items:center;
   justify-content:center;
   min-height:100vh;
-  font-family:monospace;
   color:#fff;
+  font-family:monospace;
 }
 
 /* HUD */
-#hud { display:flex; gap:20px; margin-bottom:10px; }
-.hud-val { font-weight:bold; }
+#hud { display:flex; gap:30px; margin-bottom:10px; }
 
 /* Canvas */
 canvas {
@@ -44,11 +43,13 @@ canvas {
   position:absolute;
   inset:0;
   display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
-  background:rgba(0,0,0,0.6);
+  background:rgba(0,0,0,0.7);
+  cursor:pointer;
 }
-#overlay.hidden { display:none; }
+.hidden { display:none; }
 
 .overlay-wrap { position:relative; }
 </style>
@@ -57,14 +58,16 @@ canvas {
 <body>
 
 <div id="hud">
-  Nivel: <span id="nivel-val">1</span>
-  Score: <span id="score-val">0</span>
+  Nivel: <span id="nivel">1</span>
+  Score: <span id="score">0</span>
 </div>
 
 <div class="overlay-wrap">
   <canvas id="c" width="640" height="400"></canvas>
-  <div id="overlay" class="hidden">
-    <h2>PAUSA</h2>
+
+  <div id="overlay">
+    <h1>★ STAR JUMP ★</h1>
+    <p>Click o presiona ESPACIO</p>
   </div>
 </div>
 
@@ -72,74 +75,123 @@ canvas {
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
-let estado = 'jugando'; // 🔥 ya inicia jugando
-let nivel = 1;
+let estado = 'inicio';
 let score = 0;
 
-let jugador = {
+/* jugador */
+let p = {
   x:50, y:300,
-  w:30, h:30,
+  w:30, h:35,
   vx:0, vy:0,
+  saltos:0,
   enSuelo:false
 };
 
 const gravedad = 0.5;
 
+/* plataformas */
+const plataformas = [
+  {x:0,y:360,w:640,h:40},
+  {x:120,y:280,w:100,h:10},
+  {x:300,y:220,w:100,h:10},
+  {x:480,y:160,w:100,h:10},
+  {x:300,y:100,w:120,h:10, meta:true}
+];
+
 /* INPUT */
 const keys = {};
 
-document.addEventListener('keydown', e => {
-  keys[e.code] = true;
+document.addEventListener('keydown', e=>{
+  keys[e.code]=true;
+
+  if(e.code==='Space' && estado==='inicio'){
+    iniciar();
+  }
 });
 
-document.addEventListener('keyup', e => {
-  keys[e.code] = false;
+document.addEventListener('keyup', e=>{
+  keys[e.code]=false;
 });
+
+/* overlay click */
+document.getElementById('overlay').onclick = iniciar;
+
+/* iniciar */
+function iniciar(){
+  estado='jugando';
+  document.getElementById('overlay').classList.add('hidden');
+}
 
 /* UPDATE */
 function update(){
-  if(estado !== 'jugando') return;
+  if(estado!=='jugando') return;
 
   // movimiento
-  if(keys['ArrowLeft']) jugador.vx = -4;
-  else if(keys['ArrowRight']) jugador.vx = 4;
-  else jugador.vx = 0;
+  if(keys['ArrowLeft']) p.vx=-4;
+  else if(keys['ArrowRight']) p.vx=4;
+  else p.vx=0;
 
-  // salto
-  if(keys['Space'] && jugador.enSuelo){
-    jugador.vy = -10;
-    jugador.enSuelo = false;
+  // salto doble
+  if((keys['Space']||keys['ArrowUp']) && p.saltos<2){
+    p.vy=-10;
+    p.saltos++;
+    keys['Space']=false;
   }
 
-  // física
-  jugador.vy += gravedad;
-  jugador.x += jugador.vx;
-  jugador.y += jugador.vy;
+  // gravedad
+  p.vy+=gravedad;
+  p.x+=p.vx;
+  p.y+=p.vy;
 
-  // suelo
-  if(jugador.y + jugador.h >= 360){
-    jugador.y = 360 - jugador.h;
-    jugador.vy = 0;
-    jugador.enSuelo = true;
+  // colisiones
+  p.enSuelo=false;
+
+  for(let pl of plataformas){
+    if(p.x<p.w+pl.x && p.x+p.w>pl.x){
+      if(p.y+p.h>=pl.y && p.y+p.h<=pl.y+10 && p.vy>=0){
+        p.y=pl.y-p.h;
+        p.vy=0;
+        p.enSuelo=true;
+        p.saltos=0;
+
+        if(pl.meta){
+          estado='ganaste';
+          alert('GANASTE 🎉');
+        }
+      }
+    }
   }
 
   // bordes
-  if(jugador.x < 0) jugador.x = 0;
-  if(jugador.x + jugador.w > 640) jugador.x = 640 - jugador.w;
+  if(p.x<0) p.x=0;
+  if(p.x+p.w>640) p.x=640-p.w;
+
+  // caer
+  if(p.y>450){
+    p.x=50; p.y=300;
+  }
 }
 
 /* DRAW */
 function draw(){
-  ctx.fillStyle = '#0d0d2b';
+  ctx.fillStyle='#0d0d2b';
   ctx.fillRect(0,0,640,400);
 
-  // suelo
-  ctx.fillStyle = '#2e7d32';
-  ctx.fillRect(0,360,640,40);
+  // estrellas
+  ctx.fillStyle='#fff';
+  for(let i=0;i<40;i++){
+    ctx.fillRect(Math.random()*640,Math.random()*300,2,2);
+  }
+
+  // plataformas
+  for(let pl of plataformas){
+    ctx.fillStyle=pl.meta?'#f9a825':'#2e7d32';
+    ctx.fillRect(pl.x,pl.y,pl.w,pl.h);
+  }
 
   // jugador
-  ctx.fillStyle = '#4fc3f7';
-  ctx.fillRect(jugador.x, jugador.y, jugador.w, jugador.h);
+  ctx.fillStyle='#4fc3f7';
+  ctx.fillRect(p.x,p.y,p.w,p.h);
 }
 
 /* LOOP */
@@ -149,7 +201,6 @@ function loop(){
   requestAnimationFrame(loop);
 }
 
-/* iniciar */
 loop();
 </script>
 
